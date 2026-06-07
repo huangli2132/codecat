@@ -234,8 +234,10 @@ class Pico(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         else:
             path = self.root / ".codecat" / "memory"
         resolved = path.resolve()
-        if os.path.commonpath([str(self.root), str(resolved)]) != str(self.root):
-            raise ValueError(f"memory_dir must stay inside workspace: {memory_dir}")
+        try:
+            resolved.relative_to(self.root)
+        except ValueError:
+            raise ValueError(f"memory_dir must stay inside workspace: {memory_dir}") from None
         return resolved
 
     def _ensure_session_shape(self):
@@ -914,6 +916,8 @@ class Pico(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         resolved = path.resolve()
         # 所有文件类工具都被锚定在 workspace root 之下。
         # 这样既能防住 "../" 逃逸，也能防住符号链接解析后跳出仓库。
-        if os.path.commonpath([str(self.root), str(resolved)]) != str(self.root):
-            raise ValueError(f"path escapes workspace: {raw_path}")
+        try:
+            resolved.relative_to(self.root)
+        except ValueError:
+            raise ValueError(f"path escapes workspace: {raw_path}") from None
         return resolved
