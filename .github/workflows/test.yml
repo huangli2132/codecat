@@ -1,0 +1,70 @@
+name: test
+
+on:
+  push:
+    branches: [main, master, v3]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system ruff
+      - run: ruff check codecat/ tests/ --output-format=github
+
+  test:
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        exclude:
+          # 减少矩阵规模：最老的 OS 和最老的 Python 足够了；
+          # macOS / Windows 只跑当前最常用的 3.11。
+          - os: macos-latest
+            python-version: "3.10"
+          - os: macos-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.10"
+          - os: windows-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.13"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Compile check (Python)
+        run: python -m compileall codecat/ -q
+
+      - name: Test
+        run: python -m pytest tests/ -q --tb=short
+
+      - name: Upload test artifacts (session evidence)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-evidence-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            .codecat/sessions/
+            .codecat/runs/
+          if-no-files-found: ignore
